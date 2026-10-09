@@ -520,7 +520,7 @@ body { letter-spacing: -.01em; }
 .quick-move button { flex: 0 0 auto; min-height: 34px; padding: 6px 11px; border-radius: 999px; font-size: 12px; }
 .quick-move button b { margin-left: 4px; }
 .quick-move .quick-active { color: #fff; border-color: var(--blue); background: var(--blue); box-shadow: 0 5px 12px rgba(65,105,225,.2); }
-.board-toolbar { border: 0; background: transparent; box-shadow: none; padding: 0 !important; }
+.board-toolbar { position: sticky; z-index: 7; top: 8px; border: 1px solid rgba(230,235,242,.9); background: rgba(248,250,252,.9); box-shadow: 0 7px 18px rgba(24,34,55,.08); padding: 8px !important; backdrop-filter: blur(14px); }
 .board-toolbar input, .board-toolbar select { background: #fff; border-radius: 12px; }
 .view-switch { display: flex; gap: 4px; min-width: max-content; padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: #f5f7fb; }
 .view-switch button { min-height: 34px; padding: 5px 9px; border: 0; border-radius: 9px; box-shadow: none; font-size: 12px; }
@@ -555,8 +555,8 @@ body { letter-spacing: -.01em; }
   .hero-actions { width: 100%; }
   .hero-actions button { flex: 1 1 145px; }
   .command-actions { width: 100%; }
-  .command-actions button { flex: 1 1 130px; }
   .command-actions button { flex: 1 1 110px; }
+  .board-toolbar { top: 4px; padding: 7px !important; }
   .overview-strip { margin-inline: -2px; }
   .quick-move { margin-inline: -2px; padding-inline: 2px; }
   .board-view-pocket .department-card { grid-template-columns: 1fr; }
