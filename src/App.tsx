@@ -520,7 +520,7 @@ export default function App() {
         <>
           <section className="command-bar panel">
             <div><span className="eyebrow accent">Živá směna</span><h1>Směnová tabule · {rosterShift}</h1><div className="shift-tabs compact">{(['A', 'B', 'C'] as ShiftCode[]).map((code) => <button type="button" key={code} className={rosterShift === code ? '' : 'secondary'} onClick={() => setRosterShift(code)}>{code}</button>)}</div></div>
-            <div className="command-actions"><button type="button" className="secondary" onClick={() => setActivePage('roster')}>Stálý stav</button><button type="button" className="secondary" onClick={() => exportShift(shift)}>Export</button><button type="button" className="secondary" onClick={endShift}>Ukončit směnu</button></div>
+            <div className="command-actions"><button type="button" className="secondary" onClick={() => setActivePage('roster')}>Stálý stav</button><button type="button" className="secondary" onClick={() => setActivePage('import')}>Import z fotky</button><button type="button" onClick={() => document.querySelector('.board-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Přidat OP</button><button type="button" className="secondary" onClick={() => exportShift(shift)}>Export</button><button type="button" className="secondary" onClick={endShift}>Ukončit směnu</button></div>
           </section>
 
           <section className="overview-strip" aria-label="Souhrn směny">

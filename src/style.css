@@ -508,6 +508,8 @@ body { letter-spacing: -.01em; }
 .hero-actions button, .command-actions button { border-radius: 12px; }
 .command-bar { padding: 18px 22px !important; background: #fff; }
 .command-bar h1 { letter-spacing: -.035em; }
+.command-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.command-actions button { min-height: 38px; padding-inline: 12px; }
 .overview-strip { border: 0; border-radius: 14px; padding: 11px 14px; background: var(--navy); box-shadow: 0 8px 20px rgba(17,26,60,.12); }
 .overview-total { background: transparent; font-weight: 700; }
 .overview-chip { border: 0; background: rgba(255,255,255,.09); }
@@ -541,6 +543,7 @@ body { letter-spacing: -.01em; }
   .hero-actions { width: 100%; }
   .hero-actions button { flex: 1 1 145px; }
   .command-actions { width: 100%; }
+  .command-actions button { flex: 1 1 130px; }
   .command-actions button { flex: 1 1 110px; }
   .overview-strip { margin-inline: -2px; }
   .quick-move { margin-inline: -2px; padding-inline: 2px; }
