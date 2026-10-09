@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { addOperatorToShift, createShift, moveOperator, moveOperators, movedOnly, returnOperatorsToStart, returnToStart, type ShiftState } from './lib/shifts';
-import { exportShift, loadProblemSolvers, loadShift, saveProblemSolvers, saveShift } from './lib/storage';
+import { addOperatorToShift, createShift, moveOperator, moveOperators, movedOnly, recordShiftAction, returnOperatorsToStart, returnToStart, type ShiftState } from './lib/shifts';
+import { exportShift, exportShiftCsv, loadProblemSolvers, loadShift, saveProblemSolvers, saveShift } from './lib/storage';
 import { filterOperators } from './lib/search';
 import { type Area, type BoardAnalysisResult, type Detection, type ImageQuality, type ProblemSolver } from './types';
-import { analyzeBoardPhoto } from './ocr/pipeline';
+import type { AnalyzeBoardPhotoFn } from './ocr/pipeline';
 import { buildBoardDiagnostics, exportDiagnosticsJson } from './ocr/diagnostics';
 import { DebugPanel } from './ocr/debug';
 import { duplicates, normalizeName, parseRoster, sanitizeEmployeeCandidate } from './lib/validation';
@@ -12,7 +12,7 @@ import { isAutomaticallyConfirmed, isReviewRequired } from './lib/board';
 import { loadRoster, saveRoster, type PermanentTeam, type RosterMember, type ShiftCode } from './lib/roster';
 import { addDepartment, DEFAULT_DEPARTMENTS, loadDepartments, renameDepartment, saveDepartments, UNASSIGNED, type Department } from './lib/departments';
 import { resetPilotStorage } from './lib/pilotStorage';
-import { cloudEnabled, connectCloudBoard, createCloudBoard, saveCloudBoard, subscribeCloudBoard, type CloudStatus } from './lib/cloudSync';
+import { CloudConflictError, cloudEnabled, connectCloudBoard, createCloudBoard, saveCloudBoard, subscribeCloudBoard, type CloudStatus } from './lib/cloudSync';
 import { reportError, track } from './lib/monitoring';
 import { createOcrSession, markOcrSession, purgeExpiredOcrSessions, saveOcrSession } from './lib/ocrRetention';
 import './style.css';
@@ -86,6 +86,13 @@ export default function App() {
   useEffect(() => { saveProblemSolvers(getProblemSolvers()); }, [problemSolverNames, problemSolverAreas]);
   useEffect(() => { purgeExpiredOcrSessions(); }, []);
   useEffect(() => { track('screen_opened', { screen: activePage }); }, [activePage]);
+  useEffect(() => {
+    const online = () => setCloudStatus((status) => status === 'offline' ? 'connecting' : status);
+    const offline = () => cloudEnabled() && setCloudStatus('offline');
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); };
+  }, []);
 
   useEffect(() => {
     if (!cloudEnabled()) return;
@@ -117,9 +124,10 @@ export default function App() {
     const signature = JSON.stringify([rosterMembers, departments, problemSolvers, shift]);
     if (signature === cloudSignature.current) return;
     cloudSignature.current = signature;
-    void saveCloudBoard(createCloudBoard(rosterMembers, departments, problemSolvers, shift, cloudRevision.current)).then((revision) => {
+    setCloudStatus('saving');
+    void saveCloudBoard(createCloudBoard(rosterMembers, departments, problemSolvers, shift, cloudRevision.current), cloudRevision.current).then((revision) => {
       if (revision !== null) { cloudRevision.current = revision; setCloudStatus('online'); }
-    }).catch((caught) => { reportError(caught, { source: 'firebase_write' }); track('sync_error'); setCloudStatus('error'); });
+    }).catch((caught) => { reportError(caught, { source: 'firebase_write' }); track('sync_error'); setCloudStatus(caught instanceof CloudConflictError ? 'conflict' : navigator.onLine ? 'error' : 'offline'); });
   }, [cloudHydrated, departments, problemSolverAreas, problemSolverNames, rosterMembers, shift]);
 
   const visibleAreas = departments.filter((department) => !department.hidden).map((department) => department.name);
@@ -159,6 +167,10 @@ export default function App() {
 
   function getProblemSolvers(): ProblemSolver[] {
     return problemSolverNames.map((name, index) => ({ name, area: problemSolverAreas[index] ?? 'TRANSPORT' }));
+  }
+
+  function commitShift(next: ShiftState | null, kind: Parameters<typeof recordShiftAction>[1], people: string[] = [], detail?: string): void {
+    setShift(next ? recordShiftAction(next, kind, people, detail) : null);
   }
 
   function addRosterEntry(): void {
@@ -206,11 +218,11 @@ export default function App() {
     const renamed = next.find((item) => item.name !== name && !departments.some((current) => current.name === item.name));
     if (next === departments || !renamed) return;
     setDepartments(next);
-    setShift((current) => current ? {
+    setShift((current) => current ? recordShiftAction({
       ...current,
       operators: current.operators.map((operator) => ({ ...operator, home: operator.home === name ? renamed.name : operator.home, start: operator.start === name ? renamed.name : operator.start, current: operator.current === name ? renamed.name : operator.current })),
       movements: current.movements.map((movement) => ({ ...movement, from: movement.from === name ? renamed.name : movement.from, to: movement.to === name ? renamed.name : movement.to })),
-    } : current);
+    }, 'department_renamed', [], `${name}:${renamed.name}`) : current);
     setDepartmentDialog(null);
   }
 
@@ -222,7 +234,7 @@ export default function App() {
     if (shift) {
       setLastShiftBeforeAction(shift);
       const moved = moveOperators(shift, shift.operators.filter((operator) => operator.current === name).map((operator) => operator.name), UNASSIGNED);
-      setShift({ ...moved, operators: moved.operators.map((operator) => ({ ...operator, home: operator.home === name ? UNASSIGNED : operator.home, start: operator.start === name ? UNASSIGNED : operator.start })) });
+      commitShift({ ...moved, operators: moved.operators.map((operator) => ({ ...operator, home: operator.home === name ? UNASSIGNED : operator.home, start: operator.start === name ? UNASSIGNED : operator.start })) }, 'department_removed', moved.operators.filter((operator) => operator.current === UNASSIGNED).map((operator) => operator.name), name);
     }
     setDepartments((items) => items.filter((item) => item.name !== name));
     setDepartmentDialog(null);
@@ -249,8 +261,8 @@ export default function App() {
   function moveSelectedOperators(): void {
     if (!shift || selectedOperators.size === 0) return;
     setLastShiftBeforeAction(shift);
-    setShift(moveOperators(shift, [...selectedOperators], bulkArea));
-    track('operator_moved', { mode: 'bulk', count: selectedOperators.size });
+    commitShift(moveOperators(shift, [...selectedOperators], bulkArea), 'operators_moved', [...selectedOperators], bulkArea);
+    track('operator_moved', { mode: 'bulk', count: selectedOperators.size, names: [...selectedOperators].join('|') });
     if (bulkArea === UNASSIGNED) track('holding_area_used', { count: selectedOperators.size });
     setSelectedOperators(new Set());
     setConfirmBulkAction(null);
@@ -260,8 +272,8 @@ export default function App() {
     if (!shift || !draggedOperator) return;
     const names = selectedOperators.has(draggedOperator) ? [...selectedOperators] : [draggedOperator];
     setLastShiftBeforeAction(shift);
-    setShift(moveOperators(shift, names, area));
-    track('operator_moved', { mode: names.length > 1 ? 'drag_group' : 'drag_single', count: names.length });
+    commitShift(moveOperators(shift, names, area), names.length > 1 ? 'operators_moved' : 'operator_moved', names, area);
+    track('operator_moved', { mode: names.length > 1 ? 'drag_group' : 'drag_single', count: names.length, names: names.join('|') });
     if (area === UNASSIGNED) track('holding_area_used', { count: names.length });
     setSelectedOperators(new Set());
     setDraggedOperator('');
@@ -270,8 +282,8 @@ export default function App() {
   function returnSelectedOperators(): void {
     if (!shift || selectedOperators.size === 0) return;
     setLastShiftBeforeAction(shift);
-    setShift(returnOperatorsToStart(shift, [...selectedOperators]));
-    track('operators_returned', { count: selectedOperators.size });
+    commitShift(returnOperatorsToStart(shift, [...selectedOperators]), 'operators_returned', [...selectedOperators]);
+    track('operators_returned', { count: selectedOperators.size, names: [...selectedOperators].join('|') });
     setSelectedOperators(new Set());
     setConfirmBulkAction(null);
   }
@@ -300,6 +312,7 @@ export default function App() {
     setReviewApproved(false);
 
     try {
+      const { analyzeBoardPhoto } = await import('./ocr/pipeline') as { analyzeBoardPhoto: AnalyzeBoardPhotoFn };
       const result = await analyzeBoardPhoto(
         file,
         rosterNames,
@@ -332,17 +345,17 @@ export default function App() {
 
   function startShift(): void {
     if (confirmedOperators.length === 0) return;
-    setShift(createShift(confirmedOperators.map(({ name, area }) => ({ name, area })), getProblemSolvers()));
+    commitShift(createShift(confirmedOperators.map(({ name, area }) => ({ name, area })), getProblemSolvers()), 'shift_created', confirmedOperators.map(({ name }) => name), 'ocr');
   }
 
   function startEmptyShift(): void {
-    setShift(createShift([], getProblemSolvers()));
+    commitShift(createShift([], getProblemSolvers()), 'shift_created', [], 'empty');
     setActivePage('board');
   }
 
   function addManualOperator(): void {
     if (!manualName) return;
-    setShift((current) => current ? addOperatorToShift(current, manualName, manualArea) : current);
+    if (shift) commitShift(addOperatorToShift(shift, manualName, manualArea), 'operator_added', [manualName], manualArea);
     setManualName('');
   }
 
@@ -369,7 +382,7 @@ export default function App() {
         setReviewNotice(`${draft.name} už ve směně je. Duplicitní nález můžete vyřadit.`);
         return;
       }
-      setShift((current) => current ? addOperatorToShift(current, draft.name, selectedArea) : current);
+      if (shift) commitShift(addOperatorToShift(shift, draft.name, selectedArea), 'ocr_reviewed', [draft.name], selectedArea);
     }
 
     setResolvedRows((resolved) => new Set(resolved).add(index));
@@ -487,7 +500,7 @@ export default function App() {
         </nav>
         <div className="status-wrap">
           <span className="status-pill">{analysis ? 'Live OCR' : 'Ready'}</span>
-          <span className={`sync-status ${cloudStatus}`}>{cloudStatus === 'online' ? 'Synchronizováno' : cloudStatus === 'connecting' ? 'Připojuji' : cloudStatus === 'error' ? 'Offline změny' : 'Lokální pilot'}</span>
+          <span className={`sync-status ${cloudStatus}`}>{cloudStatus === 'online' ? 'Synchronizováno' : cloudStatus === 'saving' ? 'Ukládám' : cloudStatus === 'connecting' ? 'Připojuji' : cloudStatus === 'offline' ? 'Offline změny' : cloudStatus === 'conflict' ? 'Změna na jiném zařízení' : cloudStatus === 'error' ? 'Synchronizace čeká' : 'Lokální pilot'}</span>
           <i aria-live="polite">{progress}</i>
         </div>
       </header>
@@ -587,7 +600,7 @@ export default function App() {
         <>
           <section className="command-bar panel">
             <div><span className="eyebrow accent">Živá směna</span><h1>Směnová tabule · {rosterShift}</h1><div className="shift-tabs compact">{(['A', 'B', 'C'] as ShiftCode[]).map((code) => <button type="button" key={code} className={rosterShift === code ? '' : 'secondary'} onClick={() => setRosterShift(code)}>{code}</button>)}</div></div>
-            <div className="command-actions"><button type="button" className="secondary" onClick={() => setActivePage('roster')}>Stálý stav</button><button type="button" className="secondary" onClick={() => setActivePage('import')}>Import z fotky</button><button type="button" onClick={() => document.querySelector('.board-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Přidat OP</button><button type="button" className="secondary" onClick={() => exportShift(shift)}>Export</button><button type="button" className="secondary" onClick={endShift}>Ukončit směnu</button></div>
+            <div className="command-actions"><button type="button" className="secondary" onClick={() => setActivePage('roster')}>Stálý stav</button><button type="button" className="secondary" onClick={() => setActivePage('import')}>Import z fotky</button><button type="button" onClick={() => document.querySelector('.board-toolbar')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Přidat OP</button><button type="button" className="secondary" onClick={() => exportShift(shift)}>JSON</button><button type="button" className="secondary" onClick={() => exportShiftCsv(shift)}>CSV</button><button type="button" className="secondary" onClick={endShift}>Ukončit směnu</button></div>
           </section>
 
           <section className="overview-strip" aria-label="Souhrn směny">
@@ -631,12 +644,12 @@ export default function App() {
               const areaClass = area.toLowerCase().replace(/[^a-z0-9]+/g, '-');
               return <article className={`department-card area-${areaClass}${draggedOperator ? ' drop-ready' : ''}`} key={area} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperator(area)}>
                 <header><div><span>{area}</span><b>{shift.operators.filter((operator) => operator.current === area).length}</b></div><div className="department-tools"><small>{operators.length ? `${operators.length} zobrazeno` : 'Bez obsazení'}</small>{shift.operators.some((operator) => operator.current === area) && <button type="button" className="header-action" onClick={() => toggleAreaSelection(area)}>{shift.operators.filter((operator) => operator.current === area).every((operator) => selectedOperators.has(operator.name)) ? 'Zrušit' : 'Vybrat vše'}</button>}</div></header>
-                <div className="operator-list">{operators.length ? operators.map((operator) => <article className={`operator-card${selectedOperators.has(operator.name) ? ' selected' : ''}`} key={operator.name} draggable onDragStart={() => setDraggedOperator(operator.name)} onDragEnd={() => setDraggedOperator('')}><label className="operator-select"><input type="checkbox" checked={selectedOperators.has(operator.name)} onChange={() => toggleOperator(operator.name)} /><span><strong>{operator.name}</strong><small>{operator.home !== operator.current ? `${operator.home} → ${operator.current}` : operator.home}</small></span></label><select aria-label={`Pracoviště ${operator.name}`} value={operator.current} onChange={(event) => setShift((current) => current ? moveOperator(current, operator.name, event.target.value) : current)}>{areas.map((target) => <option key={target} value={target}>{target}</option>)}</select>{operator.current !== operator.start && <button type="button" className="tiny" onClick={() => setShift((current) => current ? returnToStart(current, operator.name) : current)}>Vrátit</button>}</article>) : <p className="empty-department">Přidejte člověka nebo jej sem přesuňte.</p>}</div>
+                <div className="operator-list">{operators.length ? operators.map((operator) => <article className={`operator-card${selectedOperators.has(operator.name) ? ' selected' : ''}`} key={operator.name} draggable onDragStart={() => setDraggedOperator(operator.name)} onDragEnd={() => setDraggedOperator('')}><label className="operator-select"><input type="checkbox" checked={selectedOperators.has(operator.name)} onChange={() => toggleOperator(operator.name)} /><span><strong>{operator.name}</strong><small>{operator.home !== operator.current ? `${operator.home} → ${operator.current}` : operator.home}</small></span></label><select aria-label={`Pracoviště ${operator.name}`} value={operator.current} onChange={(event) => { const target = event.target.value; if (shift) commitShift(moveOperator(shift, operator.name, target), 'operator_moved', [operator.name], target); }}>{areas.map((target) => <option key={target} value={target}>{target}</option>)}</select>{operator.current !== operator.start && <button type="button" className="tiny" onClick={() => shift && commitShift(returnToStart(shift, operator.name), 'operators_returned', [operator.name])}>Vrátit</button>}</article>) : <p className="empty-department">Přidejte člověka nebo jej sem přesuňte.</p>}</div>
               </article>;
             })}
           </section>
 
-          {shift.operators.some((operator) => operator.current === UNASSIGNED) && <section className="holding-area" aria-label="OP k vyřešení" onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperator(UNASSIGNED)}><div className="holding-heading"><span className="eyebrow">Odkládací místo</span><h2>K vyřešení <b>{shift.operators.filter((operator) => operator.current === UNASSIGNED).length}</b></h2><p>OP bez pozice nebo s problémem. Zůstávají mimo oddělení.</p></div><div className="holding-list">{shift.operators.filter((operator) => operator.current === UNASSIGNED).map((operator) => <article className="operator-card" key={operator.name} draggable onDragStart={() => setDraggedOperator(operator.name)} onDragEnd={() => setDraggedOperator('')}><label className="operator-select"><input type="checkbox" checked={selectedOperators.has(operator.name)} onChange={() => toggleOperator(operator.name)} /><span><strong>{operator.name}</strong><small>{operator.home} · čeká na vyřešení</small></span></label><select aria-label={`Pracoviště ${operator.name}`} value={operator.current} onChange={(event) => setShift((current) => current ? moveOperator(current, operator.name, event.target.value) : current)}>{moveAreas.map((target) => <option key={target} value={target}>{target}</option>)}</select></article>)}</div></section>}
+          {shift.operators.some((operator) => operator.current === UNASSIGNED) && <section className="holding-area" aria-label="OP k vyřešení" onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperator(UNASSIGNED)}><div className="holding-heading"><span className="eyebrow">Odkládací místo</span><h2>K vyřešení <b>{shift.operators.filter((operator) => operator.current === UNASSIGNED).length}</b></h2><p>OP bez pozice nebo s problémem. Zůstávají mimo oddělení.</p></div><div className="holding-list">{shift.operators.filter((operator) => operator.current === UNASSIGNED).map((operator) => <article className="operator-card" key={operator.name} draggable onDragStart={() => setDraggedOperator(operator.name)} onDragEnd={() => setDraggedOperator('')}><label className="operator-select"><input type="checkbox" checked={selectedOperators.has(operator.name)} onChange={() => toggleOperator(operator.name)} /><span><strong>{operator.name}</strong><small>{operator.home} · čeká na vyřešení</small></span></label><select aria-label={`Pracoviště ${operator.name}`} value={operator.current} onChange={(event) => { const target = event.target.value; if (shift) commitShift(moveOperator(shift, operator.name, target), 'operator_moved', [operator.name], target); }}>{moveAreas.map((target) => <option key={target} value={target}>{target}</option>)}</select></article>)}</div></section>}
 
         </>
       ) : <section className="panel empty-page"><h1>Nejdřív založte směnu</h1><button type="button" onClick={() => setActivePage('board')}>Zpět na přehled</button></section>}

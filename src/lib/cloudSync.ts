@@ -6,7 +6,8 @@ import type { ShiftState } from './shifts';
 import type { ProblemSolver } from '../types';
 
 export type CloudBoard = { version: 1; revision: number; roster: RosterMember[]; departments: Department[]; problemSolvers: ProblemSolver[]; shift: ShiftState | null; updatedAt?: unknown; updatedBy?: string };
-export type CloudStatus = 'local' | 'connecting' | 'online' | 'error';
+export type CloudStatus = 'local' | 'connecting' | 'saving' | 'online' | 'offline' | 'conflict' | 'error';
+export class CloudConflictError extends Error { constructor(readonly remoteRevision: number) { super('Směna byla mezitím změněna na jiném zařízení.'); this.name = 'CloudConflictError'; } }
 const BOARD_ID = 'current';
 export function cloudEnabled(): boolean { return isFirebaseConfigured(); }
 export function createCloudBoard(roster: RosterMember[], departments: Department[], problemSolvers: ProblemSolver[], shift: ShiftState | null, revision = 0): CloudBoard { return { version: 1, revision, roster, departments, problemSolvers, shift }; }
@@ -19,7 +20,7 @@ export async function subscribeCloudBoard(callback: (board: CloudBoard | null) =
   const reference = doc(services.db, 'zf-operativa-v3', BOARD_ID);
   return onSnapshot(reference, (snapshot) => { const data: unknown = snapshot.data(); callback(snapshot.exists() && isCloudBoard(data) ? data : null); }, onError);
 }
-export async function saveCloudBoard(board: CloudBoard): Promise<number | null> {
+export async function saveCloudBoard(board: CloudBoard, expectedRevision: number): Promise<number | null> {
   const services = await getFirebaseServices();
   const uid = await ensureAnonymousSession();
   if (!services || !uid) return null;
@@ -27,7 +28,10 @@ export async function saveCloudBoard(board: CloudBoard): Promise<number | null> 
   const reference = doc(services.db, 'zf-operativa-v3', BOARD_ID);
   return runTransaction(services.db, async (transaction) => {
     const current = await transaction.get(reference);
-    const next = current.exists() && isCloudBoard(current.data()) ? current.data().revision + 1 : 1;
+    const currentBoard = current.exists() && isCloudBoard(current.data()) ? current.data() : null;
+    const currentRevision = currentBoard?.revision ?? 0;
+    if (currentRevision !== expectedRevision) throw new CloudConflictError(currentRevision);
+    const next = currentRevision + 1;
     transaction.set(reference, { ...board, revision: next, updatedBy: uid, updatedAt: serverTimestamp() });
     return next;
   });

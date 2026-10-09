@@ -41,7 +41,11 @@ export type Movement = {
   from: Area;
   to: Area;
   at: string;
+  actionId?: string;
 };
+
+export type ShiftActionKind = 'shift_created' | 'operator_added' | 'operator_moved' | 'operators_moved' | 'operators_returned' | 'department_renamed' | 'department_removed' | 'ocr_reviewed' | 'shift_ended' | 'reset';
+export type ShiftAction = { id: string; kind: ShiftActionKind; at: string; sessionId: string; people: string[]; detail?: string };
 
 export type Operator = {
   name: string;

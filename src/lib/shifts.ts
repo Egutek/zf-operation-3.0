@@ -1,5 +1,5 @@
-import type {Area,Movement,ProblemSolver}from'../types';
-export type Operator={name:string;home:Area;start:Area;current:Area};export type ShiftState={startedAt:string;operators:Operator[];movements:Movement[];problemSolvers:ProblemSolver[]};
+import type {Area,Movement,ProblemSolver,ShiftAction,ShiftActionKind}from'../types';
+export type Operator={name:string;home:Area;start:Area;current:Area};export type ShiftState={startedAt:string;operators:Operator[];movements:Movement[];problemSolvers:ProblemSolver[];actions?:ShiftAction[]};
 const nameKey=(name:string)=>name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
 export function createShift(assignments:{name:string;area:Area}[],problemSolvers:ProblemSolver[]=[]):ShiftState{const seen=new Set<string>();const operators=assignments.filter(x=>{const key=nameKey(x.name);if(seen.has(key))return false;seen.add(key);return true}).map(x=>({name:x.name.trim(),home:x.area,start:x.area,current:x.area}));return{startedAt:new Date().toISOString(),operators,movements:[],problemSolvers}}
 export function addOperatorToShift(state:ShiftState,name:string,area:Area):ShiftState{if(state.operators.some(operator=>nameKey(operator.name)===nameKey(name)))return state;return{...state,operators:[...state.operators,{name:name.trim(),home:area,start:area,current:area}]}}
@@ -9,3 +9,5 @@ export function movedOnly(s:ShiftState){return s.operators.filter(x=>x.current!=
 export function areaCounts(s:ShiftState){return s.operators.reduce<Record<string,number>>((a,x)=>(a[x.current]=(a[x.current]||0)+1,a),{})}
 export function returnToStart(s:ShiftState,name:string){const op=s.operators.find(x=>x.name===name);return op?moveOperator(s,name,op.start):s}
 export function returnOperatorsToStart(state:ShiftState,names:string[],at=new Date().toISOString()):ShiftState{const selected=new Set(names.map(nameKey));return state.operators.reduce((current,operator)=>selected.has(nameKey(operator.name))?moveOperator(current,operator.name,operator.start,at):current,state)}
+export function recordShiftAction(state:ShiftState,kind:ShiftActionKind,people:string[]=[],detail?:string,sessionId=getSessionId(),at=new Date().toISOString()):ShiftState{return{...state,actions:[...(state.actions??[]),{id:crypto.randomUUID(),kind,at,sessionId,people:[...new Set(people.map(x=>x.trim()).filter(Boolean))],detail}]}}
+function getSessionId():string{const key='zf.v3.session-id';try{const current=sessionStorage.getItem(key);if(current)return current;const next=crypto.randomUUID();sessionStorage.setItem(key,next);return next}catch{return 'local'}}

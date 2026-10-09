@@ -62,6 +62,18 @@ export function exportShift(shift: ShiftState): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+export function exportShiftCsv(shift: ShiftState): void {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const lines = ['Jméno;Domovské oddělení;Start;Aktuální oddělení', ...shift.operators.map((operator) => [operator.name, operator.home, operator.start, operator.current].map(escape).join(';'))];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `shift-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function loadProblemSolvers(): ProblemSolver[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(PILOT_STORAGE.problemSolvers) ?? 'null');

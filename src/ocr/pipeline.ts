@@ -8,6 +8,7 @@ import { runMagnetOCR } from './magnetOcr';
 import { combineConfidences } from '../lib/confidence';
 import { renderAnalysisOverlay } from './overlay';
 import { isAutomaticallyConfirmed, isReviewRequired } from '../lib/board';
+import { zfBoardAreaHeaders } from './boardProfile';
 
 export const DEFAULT_AREA_HEADERS: AreaHeader[] = [
   { area: 'TRANSPORT', x: 0, y: 0, width: 120, height: 100, centerX: 60 },
@@ -34,10 +35,13 @@ export function assignOperatorToAreaWithConfidence(
   if (!areaHeaders?.length) return { area: 'UNKNOWN', confidence: 0 };
 
   const centerX = magnetRect.x + magnetRect.width / 2;
-  let nearest = areaHeaders[0];
+  const centerY = magnetRect.y + magnetRect.height / 2;
+  const eligible = areaHeaders.filter((header) => centerY >= header.y && centerY <= header.y + header.height);
+  if (eligible.length === 0) return { area: 'UNKNOWN', confidence: 0 };
+  let nearest = eligible[0];
   let nearestDistance = Number.POSITIVE_INFINITY;
 
-  for (const header of areaHeaders) {
+  for (const header of eligible) {
     const distance = Math.abs(centerX - header.centerX);
     if (distance < nearestDistance) {
       nearestDistance = distance;
@@ -131,7 +135,7 @@ export async function analyzeBoardPhoto(
   if (!prep.quality.usable) throw new UnusableImageError(prep.quality, prep.url, prep.overlayUrl);
 
   const canvas = prep.canvas;
-  const normalizedHeaders = areaHeaders.length > 0 ? areaHeaders : buildAreaHeadersFromBoard(canvas.width, canvas.height);
+  const normalizedHeaders = areaHeaders.length > 0 ? areaHeaders : zfBoardAreaHeaders(canvas.width, canvas.height);
   const ocrStartedAt = performance.now();
   const magnetResults = prep.magnets.length > 0 ? await runMagnetOCR(canvas, prep.magnets, config, progress) : [];
   const ocrMs = performance.now() - ocrStartedAt;
@@ -170,9 +174,9 @@ export async function analyzeBoardPhoto(
     }
   }
 
-  if (prep.magnets.length === 0 && prep.boardDetected) {
+  if (prep.boardDetected && (prep.magnets.length === 0 || assignedOperators.length === 0)) {
     const boardRows = await readBoard(prep.url, roster, () => undefined);
-    for (const row of boardRows) {
+    for (const row of boardRows.filter((row) => !detectionRows.some((current) => current.matched && current.matched === row.matched && current.area === row.area))) {
       detectionRows.push(row);
       if (row.matched) {
         assignedOperators.push({

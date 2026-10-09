@@ -66,3 +66,9 @@
 - Shared state uses the dedicated `zf-operativa-v3/current` board document and anonymous Firebase authentication; no legacy project, key or data path is read.
 - Monitoring uses a fixed anonymous event allowlist and removes request, user and breadcrumb content before Sentry delivery.
 - OCR source files are not uploaded by this client foundation. Browser-session metadata expires after seven days; cloud upload remains disabled until a reviewed Storage lifecycle exists.
+# 2026-10-09 — V3 stays parallel until manual approval
+
+- `zf-operative.eu` remains unchanged; the target is a separate Vercel preview.
+- Firebase V3 uses anonymous sessions and a versioned Firestore board. Concurrent writes now produce an explicit conflict state instead of silently replacing a newer board.
+- OCR uses a physical-board zone profile and falls back to full-board OCR when magnet OCR has no matched OP.
+- Monitoring may include operational action names, but never board photos or phone contacts.
