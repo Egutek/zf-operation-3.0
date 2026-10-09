@@ -32,3 +32,24 @@ npm run dev
 3. Geometrické přiřazování magnetky k nejbližšímu nadpisu pracoviště.
 4. Druhý nezávislý OCR průchod a disagreement gate.
 5. Benchmark na reálných snímcích: missed magnets, wrong identity, wrong area, false positives.
+# ZF Operativa 3.0
+
+Výchozí vizuální základ pro další vývoj ZF Operativy. V3 je lokální React/Vite pilot inspirovaný referenčním buildem `https://zfoperativa.netlify.app/`.
+
+## Vývojový směr
+
+- směna jako hlavní pracovní plocha s rychlými filtry a provozními souhrny;
+- režimy Oddělení, Kapesní mistr a Seznam;
+- responzivní mřížka 4/3/2/1 a mobilní spodní navigace;
+- oddělené Transport/VNA a problem solveři mimo seznam OP;
+- lokální přesuny, hromadné akce, návrat a undo bez nového backendu;
+- OCR zůstává oddělený modul a bude připojen až po schválení UI.
+
+## Spuštění
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Referenční assety z Netlify jsou uložené v `reference/netlify/`. Produkční Firebase aplikace není součástí V3 a tímto repozitářem se nemění.
