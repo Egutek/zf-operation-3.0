@@ -553,6 +553,10 @@ body { letter-spacing: -.01em; }
 .team-roster > header { border-radius: 11px 11px 0 0; }
 .advanced-roster { border-color: #e7ebf1; }
 .mobile-nav { background: rgba(255,255,255,.96); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid rgba(65,105,225,.38); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
 @media (max-width: 760px) {
   .zf-shell { padding: 10px 10px 88px; }
   .hero { padding: 22px 18px; }
