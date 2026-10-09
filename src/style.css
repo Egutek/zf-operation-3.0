@@ -532,6 +532,10 @@ body { letter-spacing: -.01em; }
 .department-card:nth-child(3n+2) > header { background: linear-gradient(135deg, #35a9cc 0%, #3476c8 100%); }
 .department-card:nth-child(3n) > header { background: linear-gradient(135deg, #6440e0 0%, #4a25bd 100%); }
 .department-card:nth-child(4n) > header { background: linear-gradient(135deg, #3e63d6 0%, #2f48b4 100%); }
+.department-card.area-transport > header { background: linear-gradient(135deg, #19a37e 0%, #147b70 100%); }
+.department-card.area-vna > header { background: linear-gradient(135deg, #3d82d8 0%, #2e59bd 100%); }
+.department-card.area-hovs-ml > header { background: linear-gradient(135deg, #7050e8 0%, #4e2bb8 100%); }
+.department-card.area-putaway > header, .department-card.area-outbound > header { background: linear-gradient(135deg, #269ebc 0%, #2264b5 100%); }
 .department-card > header span { font-size: 1.12rem; }
 .department-card > header b { font-size: 1.55rem; }
 .operator-list { padding: 8px; gap: 8px; max-height: 520px; overflow: auto; }
