@@ -557,6 +557,13 @@ body { letter-spacing: -.01em; }
 .board-view-list { grid-template-columns: 1fr !important; }
 .board-view-list .department-card { min-height: 0; }
 .board-view-list .operator-list { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
+.holding-area { display: grid; grid-template-columns: minmax(190px, .28fr) minmax(0, 1fr); gap: 14px; align-items: center; margin-top: 14px; padding: 12px; border: 1px dashed #d8c98e; border-radius: 14px; background: rgba(255,251,231,.72); }
+.holding-heading { padding: 4px 6px; }
+.holding-heading h2 { margin: 4px 0; font-size: 1rem; }
+.holding-heading h2 b { color: #896d12; }
+.holding-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.holding-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.holding-list .operator-card { background: rgba(255,255,255,.82); }
 .team-roster > header { border-radius: 11px 11px 0 0; }
 .advanced-roster { border-color: #e7ebf1; }
 .mobile-nav { background: rgba(255,255,255,.96); }
@@ -577,4 +584,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .quick-move { margin-inline: -2px; padding-inline: 2px; }
   .board-view-pocket .department-card { grid-template-columns: 1fr; }
   .board-view-list .operator-list { grid-template-columns: 1fr; }
+  .holding-area { grid-template-columns: 1fr; }
 }

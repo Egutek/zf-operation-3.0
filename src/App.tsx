@@ -79,7 +79,8 @@ export default function App() {
 
   const visibleAreas = departments.filter((department) => !department.hidden).map((department) => department.name);
   const occupiedHiddenAreas = [...new Set(shift?.operators.map((operator) => operator.current).filter((area) => !visibleAreas.includes(area)) ?? [])];
-  const areas = [...visibleAreas, ...occupiedHiddenAreas];
+  const areas = [...visibleAreas, ...occupiedHiddenAreas.filter((area) => area !== UNASSIGNED)];
+  const moveAreas = [...areas, UNASSIGNED];
 
   const rows = analysis?.detections ?? [];
   const duplicateNames = duplicates(rows);
@@ -555,7 +556,7 @@ export default function App() {
           <section className={`panel bulk-toolbar${selectedOperators.size ? ' bulk-active' : ''}`}>
             <strong>{selectedOperators.size ? `Vybráno ${selectedOperators.size} OP` : 'Hromadná správa OP'}</strong>
             <span className="muted">Označte lidi kartou nebo je přetáhněte mezi odděleními.</span>
-            <select aria-label="Cílové oddělení pro vybrané OP" value={bulkArea} onChange={(event) => setBulkArea(event.target.value)}>{areas.map((area) => <option key={area} value={area}>{area}</option>)}</select>
+            <select aria-label="Cílové oddělení pro vybrané OP" value={bulkArea} onChange={(event) => setBulkArea(event.target.value)}>{moveAreas.map((area) => <option key={area} value={area}>{area}</option>)}</select>
             <button type="button" disabled={selectedOperators.size === 0} onClick={() => setConfirmBulkAction('move')}>Přesunout vybrané</button>
             <button type="button" className="secondary" disabled={selectedOperators.size === 0} onClick={() => setConfirmBulkAction('return')}>Vrátit na start</button>
             {selectedOperators.size > 0 && <button type="button" className="secondary" onClick={() => setSelectedOperators(new Set())}>Zrušit výběr</button>}
@@ -573,6 +574,8 @@ export default function App() {
               </article>;
             })}
           </section>
+
+          {shift.operators.some((operator) => operator.current === UNASSIGNED) && <section className="holding-area" aria-label="OP k vyřešení" onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperator(UNASSIGNED)}><div className="holding-heading"><span className="eyebrow">Odkládací místo</span><h2>K vyřešení <b>{shift.operators.filter((operator) => operator.current === UNASSIGNED).length}</b></h2><p>OP bez pozice nebo s problémem. Zůstávají mimo oddělení.</p></div><div className="holding-list">{shift.operators.filter((operator) => operator.current === UNASSIGNED).map((operator) => <article className="operator-card" key={operator.name} draggable onDragStart={() => setDraggedOperator(operator.name)} onDragEnd={() => setDraggedOperator('')}><label className="operator-select"><input type="checkbox" checked={selectedOperators.has(operator.name)} onChange={() => toggleOperator(operator.name)} /><span><strong>{operator.name}</strong><small>{operator.home} · čeká na vyřešení</small></span></label><select aria-label={`Pracoviště ${operator.name}`} value={operator.current} onChange={(event) => setShift((current) => current ? moveOperator(current, operator.name, event.target.value) : current)}>{moveAreas.map((target) => <option key={target} value={target}>{target}</option>)}</select></article>)}</div></section>}
 
         </>
       ) : <section className="panel empty-page"><h1>Nejdřív založte směnu</h1><button type="button" onClick={() => setActivePage('board')}>Zpět na přehled</button></section>}
