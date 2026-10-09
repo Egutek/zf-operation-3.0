@@ -505,6 +505,13 @@ body { letter-spacing: -.01em; }
 .status-wrap { font-size: 12px; }
 .status-pill { padding: 5px 9px; color: #805e00; border: 1px solid #f0df91; background: #fffbe7; }
 .hero, .command-bar, .page-heading { border-radius: 16px; }
+.ocr-stepper { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.ocr-step { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.82); }
+.ocr-step > b { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 10px; color: var(--blue); background: #eef3ff; font-size: 11px; }
+.ocr-step span { display: grid; gap: 2px; min-width: 0; }
+.ocr-step strong { font-size: 13px; }
+.ocr-step small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.ocr-step.done > b { color: var(--green-deep); background: var(--green-soft); }
 .hero { min-height: 170px; align-items: center; padding: 30px; background: linear-gradient(120deg, #fff 0%, #edf4ff 100%); }
 .hero h1 { font-size: clamp(1.8rem, 3.4vw, 3.15rem); letter-spacing: -.045em; }
 .hero-actions button, .command-actions button { border-radius: 12px; }
@@ -561,6 +568,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .zf-shell { padding: 10px 10px 88px; }
   .hero { padding: 22px 18px; }
   .hero-actions { width: 100%; }
+  .ocr-stepper { grid-template-columns: 1fr; }
   .hero-actions button { flex: 1 1 145px; }
   .command-actions { width: 100%; }
   .command-actions button { flex: 1 1 110px; }

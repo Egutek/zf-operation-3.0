@@ -450,6 +450,9 @@ export default function App() {
             <div><span className="eyebrow accent">Import</span><h1>Načíst směnu z fotografie</h1><p>Fotografie je pomocný vstup. Před spuštěním směny zkontrolujte rozpoznaná jména.</p></div>
             <label className="upload">{busy ? progress : 'Vybrat fotografii'}<input type="file" accept="image/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void loadPhoto(file); }} /></label>
           </section>
+          <section className="ocr-stepper" aria-label="Postup importu">
+            {([['01', 'Nahrát', 'Vyberte fotografii tabule'], ['02', 'Zkontrolovat', 'Prověřte nejisté nálezy'], ['03', 'Potvrdit', 'Založte směnu z ověřených OP']] as const).map(([number, title, detail], index) => <div className={`ocr-step${(analysis && index > 0) || (reviewApproved && index === 2) ? ' done' : ''}`} key={number}><b>{number}</b><span><strong>{title}</strong><small>{detail}</small></span></div>)}
+          </section>
           <section className="summary-strip">
             <article className="summary-tile">
               <span>Detekce tabule</span>
