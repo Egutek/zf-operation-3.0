@@ -417,8 +417,8 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">ZF</div>
           <div>
-            <span className="eyebrow">Warehouse Ops</span>
-            <h3>Team Lead Board</h3>
+            <span className="eyebrow">ZF Ostrov · Oddělení PICK</span>
+            <h3>Operativa směny</h3>
           </div>
         </div>
         <nav className="main-nav" aria-label="Hlavní navigace">
