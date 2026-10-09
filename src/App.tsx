@@ -18,6 +18,7 @@ const DEFAULT_ROSTER: RosterMember[] = [{ name: 'NOVAK JAN', team: 'TRANSPORT', 
 
 type ReviewDraft = { name: string; area: Exclude<Area, 'UNKNOWN'> | '' };
 type AppPage = 'board' | 'roster' | 'import';
+type BoardView = 'departments' | 'pocket' | 'list';
 type DepartmentDialog = { type: 'rename' | 'remove'; name: string; value: string };
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -53,6 +54,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [transportOnly, setTransportOnly] = useState(false);
   const [activePage, setActivePage] = useState<AppPage>('board');
+  const [boardView, setBoardView] = useState<BoardView>('departments');
   const [manualName, setManualName] = useState('');
   const [manualArea, setManualArea] = useState<Area>('TRANSPORT');
   const [selectedOperators, setSelectedOperators] = useState<Set<string>>(() => new Set());
@@ -541,6 +543,7 @@ export default function App() {
           <section className="panel board-toolbar">
             <input aria-label="Hledat zaměstnance" placeholder="Hledat člověka nebo oddělení" value={query} onChange={(event) => setQuery(event.target.value)} />
             <label><input type="checkbox" checked={transportOnly} onChange={(event) => setTransportOnly(event.target.checked)} /> Jen Transport</label>
+            <div className="view-switch" aria-label="Režim zobrazení">{([['departments', 'Oddělení'], ['pocket', 'Kapesní mistr'], ['list', 'Seznam']] as [BoardView, string][]).map(([view, label]) => <button type="button" key={view} className={boardView === view ? 'view-active' : 'secondary'} onClick={() => setBoardView(view)}>{label}</button>)}</div>
             <select aria-label="Vybrat člověka do směny" value={manualName} onChange={(event) => setManualName(event.target.value)}><option value="">Přidat člověka…</option>{rosterNames.filter((name) => !shift.operators.some((operator) => normalizeName(operator.name) === normalizeName(name))).map((name) => <option key={name} value={name}>{name}</option>)}</select>
             <select aria-label="Výchozí oddělení" value={manualArea} onChange={(event) => setManualArea(event.target.value)}>{areas.map((area) => <option key={area} value={area}>{area}</option>)}</select>
             <button type="button" onClick={addManualOperator} disabled={!manualName}>Přidat</button>
@@ -557,7 +560,7 @@ export default function App() {
             {confirmBulkAction && <div className="bulk-confirm"><span>{confirmBulkAction === 'move' ? `Přesunout ${selectedOperators.size} OP do ${bulkArea}?` : `Vrátit ${selectedOperators.size} OP na startovní pozici?`}</span><button type="button" onClick={confirmBulkAction === 'move' ? moveSelectedOperators : returnSelectedOperators}>Potvrdit</button><button type="button" className="secondary" onClick={() => setConfirmBulkAction(null)}>Zrušit</button></div>}
           </section>
 
-          <section className="department-grid" aria-label="Oddělení směny">
+          <section className={`department-grid board-view-${boardView}`} aria-label="Oddělení směny">
             {areas.map((area) => {
               const operators = filterOperators(shift.operators, query, transportOnly).filter((operator) => operator.current === area);
               return <article className={`department-card${draggedOperator ? ' drop-ready' : ''}`} key={area} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOperator(area)}>
