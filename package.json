@@ -1,7 +1,7 @@
 {
-  "name": "zf-operation-3.0",
+  "name": "zf-operation-4.0",
   "private": true,
-  "version": "0.1.0",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

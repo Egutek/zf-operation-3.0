@@ -15,6 +15,7 @@ import { resetPilotStorage } from './lib/pilotStorage';
 import { CloudConflictError, cloudEnabled, connectCloudBoard, createCloudBoard, saveCloudBoard, subscribeCloudBoard, type CloudStatus } from './lib/cloudSync';
 import { reportError, track } from './lib/monitoring';
 import { createOcrSession, markOcrSession, purgeExpiredOcrSessions, saveOcrSession } from './lib/ocrRetention';
+import { APP_STAGE, APP_VERSION } from './lib/version';
 import './style.css';
 
 const DEFAULT_ROSTER: RosterMember[] = [{ name: 'NOVAK JAN', team: 'TRANSPORT', shift: 'A' }, { name: 'SVOBODA PETR', team: 'TRANSPORT', shift: 'A' }, { name: 'DVORAK MARTIN', team: 'VNA', shift: 'A' }];
@@ -492,14 +493,14 @@ export default function App() {
           <div className="brand-mark">ZF</div>
           <div>
             <span className="eyebrow">ZF Ostrov · Oddělení PICK</span>
-            <h3>Operativa směny</h3>
+            <h3>Operativa směny <small className="version-chip">V{APP_VERSION}</small></h3>
           </div>
         </div>
         <nav className="main-nav" aria-label="Hlavní navigace">
           {([['board', 'Směna'], ['roster', 'Stálý stav'], ['import', 'Import']] as [AppPage, string][]).map(([page, label]) => <button type="button" key={page} className={activePage === page ? 'nav-active' : 'secondary'} onClick={() => setActivePage(page)}>{label}</button>)}
         </nav>
         <div className="status-wrap">
-          <span className="status-pill">{analysis ? 'Live OCR' : 'Ready'}</span>
+          <span className="status-pill">{analysis ? 'Live OCR' : APP_STAGE}</span>
           <span className={`sync-status ${cloudStatus}`}>{cloudStatus === 'online' ? 'Synchronizováno' : cloudStatus === 'saving' ? 'Ukládám' : cloudStatus === 'connecting' ? 'Připojuji' : cloudStatus === 'offline' ? 'Offline změny' : cloudStatus === 'conflict' ? 'Změna na jiném zařízení' : cloudStatus === 'error' ? 'Synchronizace čeká' : 'Lokální pilot'}</span>
           <i aria-live="polite">{progress}</i>
         </div>
