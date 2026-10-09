@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addOperatorToShift, createShift, moveOperator, moveOperators, movedOnly, returnOperatorsToStart, returnToStart, type ShiftState } from './lib/shifts';
 import { exportShift, loadProblemSolvers, loadShift, saveProblemSolvers, saveShift } from './lib/storage';
 import { filterOperators } from './lib/search';
@@ -12,6 +12,9 @@ import { isAutomaticallyConfirmed, isReviewRequired } from './lib/board';
 import { loadRoster, saveRoster, type PermanentTeam, type RosterMember, type ShiftCode } from './lib/roster';
 import { addDepartment, DEFAULT_DEPARTMENTS, loadDepartments, renameDepartment, saveDepartments, UNASSIGNED, type Department } from './lib/departments';
 import { resetPilotStorage } from './lib/pilotStorage';
+import { cloudEnabled, connectCloudBoard, createCloudBoard, saveCloudBoard, subscribeCloudBoard, type CloudStatus } from './lib/cloudSync';
+import { reportError, track } from './lib/monitoring';
+import { createOcrSession, markOcrSession, purgeExpiredOcrSessions, saveOcrSession } from './lib/ocrRetention';
 import './style.css';
 
 const DEFAULT_ROSTER: RosterMember[] = [{ name: 'NOVAK JAN', team: 'TRANSPORT', shift: 'A' }, { name: 'SVOBODA PETR', team: 'TRANSPORT', shift: 'A' }, { name: 'DVORAK MARTIN', team: 'VNA', shift: 'A' }];
@@ -68,6 +71,11 @@ export default function App() {
   const [reviewApproved, setReviewApproved] = useState(false);
   const [problemSolverNames, setProblemSolverNames] = useState<string[]>(() => loadProblemSolvers().map((solver) => solver.name));
   const [problemSolverAreas, setProblemSolverAreas] = useState<ProblemSolver['area'][]>(() => loadProblemSolvers().map((solver) => solver.area));
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>(() => cloudEnabled() ? 'connecting' : 'local');
+  const [cloudHydrated, setCloudHydrated] = useState(false);
+  const cloudSignature = useRef('');
+  const cloudRevision = useRef(0);
+  const currentOcrSession = useRef<string | null>(null);
 
   useEffect(() => {
     saveShift(shift);
@@ -76,6 +84,43 @@ export default function App() {
   useEffect(() => { saveRoster(rosterMembers); }, [rosterMembers]);
   useEffect(() => { saveDepartments(departments); }, [departments]);
   useEffect(() => { saveProblemSolvers(getProblemSolvers()); }, [problemSolverNames, problemSolverAreas]);
+  useEffect(() => { purgeExpiredOcrSessions(); }, []);
+  useEffect(() => { track('screen_opened', { screen: activePage }); }, [activePage]);
+
+  useEffect(() => {
+    if (!cloudEnabled()) return;
+    let unsubscribe: (() => void) | null = null;
+    void connectCloudBoard().then(async (uid) => {
+      if (!uid) throw new Error('Anonymní připojení Firebase není dostupné.');
+      unsubscribe = await subscribeCloudBoard((remote) => {
+        setCloudHydrated(true);
+        if (!remote) { setCloudStatus('online'); return; }
+        cloudRevision.current = remote.revision;
+        const signature = JSON.stringify([remote.roster, remote.departments, remote.problemSolvers, remote.shift]);
+        if (signature !== cloudSignature.current) {
+          cloudSignature.current = signature;
+          setRosterMembers(remote.roster);
+          setDepartments(remote.departments);
+          setProblemSolverNames(remote.problemSolvers.map((solver) => solver.name));
+          setProblemSolverAreas(remote.problemSolvers.map((solver) => solver.area));
+          setShift(remote.shift);
+        }
+        setCloudStatus('online');
+      }, (caught) => { reportError(caught, { source: 'firebase_sync' }); track('sync_error'); setCloudStatus('error'); setCloudHydrated(true); });
+    }).catch((caught) => { reportError(caught, { source: 'firebase_auth' }); track('sync_error'); setCloudStatus('error'); setCloudHydrated(true); });
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    if (!cloudEnabled() || !cloudHydrated) return;
+    const problemSolvers = getProblemSolvers();
+    const signature = JSON.stringify([rosterMembers, departments, problemSolvers, shift]);
+    if (signature === cloudSignature.current) return;
+    cloudSignature.current = signature;
+    void saveCloudBoard(createCloudBoard(rosterMembers, departments, problemSolvers, shift, cloudRevision.current)).then((revision) => {
+      if (revision !== null) { cloudRevision.current = revision; setCloudStatus('online'); }
+    }).catch((caught) => { reportError(caught, { source: 'firebase_write' }); track('sync_error'); setCloudStatus('error'); });
+  }, [cloudHydrated, departments, problemSolverAreas, problemSolverNames, rosterMembers, shift]);
 
   const visibleAreas = departments.filter((department) => !department.hidden).map((department) => department.name);
   const occupiedHiddenAreas = [...new Set(shift?.operators.map((operator) => operator.current).filter((area) => !visibleAreas.includes(area)) ?? [])];
@@ -205,6 +250,8 @@ export default function App() {
     if (!shift || selectedOperators.size === 0) return;
     setLastShiftBeforeAction(shift);
     setShift(moveOperators(shift, [...selectedOperators], bulkArea));
+    track('operator_moved', { mode: 'bulk', count: selectedOperators.size });
+    if (bulkArea === UNASSIGNED) track('holding_area_used', { count: selectedOperators.size });
     setSelectedOperators(new Set());
     setConfirmBulkAction(null);
   }
@@ -214,6 +261,8 @@ export default function App() {
     const names = selectedOperators.has(draggedOperator) ? [...selectedOperators] : [draggedOperator];
     setLastShiftBeforeAction(shift);
     setShift(moveOperators(shift, names, area));
+    track('operator_moved', { mode: names.length > 1 ? 'drag_group' : 'drag_single', count: names.length });
+    if (area === UNASSIGNED) track('holding_area_used', { count: names.length });
     setSelectedOperators(new Set());
     setDraggedOperator('');
   }
@@ -222,6 +271,7 @@ export default function App() {
     if (!shift || selectedOperators.size === 0) return;
     setLastShiftBeforeAction(shift);
     setShift(returnOperatorsToStart(shift, [...selectedOperators]));
+    track('operators_returned', { count: selectedOperators.size });
     setSelectedOperators(new Set());
     setConfirmBulkAction(null);
   }
@@ -233,6 +283,10 @@ export default function App() {
   }
 
   async function loadPhoto(file: File): Promise<void> {
+    track('ocr_started');
+    const session = createOcrSession();
+    currentOcrSession.current = session.id;
+    saveOcrSession(session);
     setBusy(true);
     setProgress('Připravuji fotografii');
     setError('');
@@ -254,11 +308,14 @@ export default function App() {
         (current, total) => setProgress(`OCR ${Math.min(current + 1, total)} / ${total}`)
       );
       setAnalysis(result);
+      track('ocr_completed', { board_detected: Boolean(result.boardDetected), review_required: result.review.hasBlockingIssues });
       setQuality(result.imageQuality ?? null);
       setPreviewUrl(result.imageUrl ?? '');
       setOverlayUrl(result.overlayUrl ?? '');
       setProgress('Analýza dokončena');
     } catch (caught) {
+      reportError(caught, { source: 'ocr_pipeline' });
+      if (currentOcrSession.current) markOcrSession(currentOcrSession.current, 'discarded');
       if (caught instanceof UnusableImageError) {
         setQuality(caught.quality);
         setPreviewUrl(caught.previewUrl ?? '');
@@ -318,11 +375,14 @@ export default function App() {
     setResolvedRows((resolved) => new Set(resolved).add(index));
     setReviewNotice(include ? 'Případ byl zkontrolován a přiřazen.' : 'Nález byl vyřazen ze směny.');
     setReviewApproved(false);
+    track('ocr_reviewed', { included: include });
   }
 
   function approveReview(): void {
     if (reviewRows.length === 0) {
       setReviewApproved(true);
+      track('ocr_reviewed', { approved: true });
+      if (currentOcrSession.current) markOcrSession(currentOcrSession.current, 'reviewed');
       setReviewNotice('Kontrola potvrzena. Další upozornění se pro tento snímek nezobrazí.');
     }
   }
@@ -427,6 +487,7 @@ export default function App() {
         </nav>
         <div className="status-wrap">
           <span className="status-pill">{analysis ? 'Live OCR' : 'Ready'}</span>
+          <span className={`sync-status ${cloudStatus}`}>{cloudStatus === 'online' ? 'Synchronizováno' : cloudStatus === 'connecting' ? 'Připojuji' : cloudStatus === 'error' ? 'Offline změny' : 'Lokální pilot'}</span>
           <i aria-live="polite">{progress}</i>
         </div>
       </header>

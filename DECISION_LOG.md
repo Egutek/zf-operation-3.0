@@ -61,3 +61,8 @@
 - Referenční build `zfoperativa.netlify.app` je uložen v `reference/netlify/`; veřejné zdrojové mapy nebyly dostupné.
 - OCR zůstává oddělené a propojení s novým UI přijde až po schválení vizuálního pilotu.
 - Vizuální mřížka používá 4/3/2/1 sloupce a mobilní rychlé filtry bez veřejné historie.
+- V3 activates Firebase only after every V3-specific environment variable exists; without them it remains a fully working local pilot.
+- Firebase, Sentry and PostHog load only when configured, keeping the ordinary mobile start lightweight.
+- Shared state uses the dedicated `zf-operativa-v3/current` board document and anonymous Firebase authentication; no legacy project, key or data path is read.
+- Monitoring uses a fixed anonymous event allowlist and removes request, user and breadcrumb content before Sentry delivery.
+- OCR source files are not uploaded by this client foundation. Browser-session metadata expires after seven days; cloud upload remains disabled until a reviewed Storage lifecycle exists.

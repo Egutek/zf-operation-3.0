@@ -9,7 +9,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sentry/react": "^11.5.0",
     "@vitejs/plugin-react": "latest",
+    "firebase": "^13.0.0",
+    "posthog-js": "^1.438.2",
     "react": "latest",
     "react-dom": "latest",
     "tesseract.js": "latest",

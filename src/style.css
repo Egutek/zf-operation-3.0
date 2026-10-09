@@ -113,6 +113,11 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   gap: 12px;
   color: var(--muted);
 }
+
+.sync-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; background: #eef2f7; color: #526174; font-size: 12px; font-weight: 700; }
+.sync-status.online { background: #e6f6ed; color: #177343; }
+.sync-status.connecting { background: #e8f1ff; color: #1759b0; }
+.sync-status.error { background: #fff2df; color: #9a5a00; }
 .status-pill {
   display: inline-flex;
   align-items: center;
